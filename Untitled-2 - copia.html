@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensación Boogaloo Dance - Academia de Salsa y Bachata</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- GSAP (Para animaciones de transición) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700;900&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --color-arena: #F0E6D2;
+            --color-turquesa: #40E0D0;
+            --color-turquesa-dark: #008080;
+            --color-texto-oscuro: #2D2D2D;
+            --color-blanco: #FFFFFF;
+            --font-titulos: 'Playfair Display', serif;
+            --font-cuerpo: 'Montserrat', sans-serif;
+        }
+
+        body {
+            font-family: var(--font-cuerpo);
+            background-color: var(--color-arena);
+            color: var(--color-texto-oscuro);
+            overflow: hidden;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: var(--font-titulos);
+        }
+
+        .bg-turquesa { background-color: var(--color-turquesa); }
+        .bg-turquesa-dark { background-color: var(--color-turquesa-dark); }
+        .text-turquesa { color: var(--color-turquesa); }
+        .text-turquesa-dark { color: var(--color-turquesa-dark); }
+        .border-turquesa { border-color: var(--color-turquesa); }
+
+        .page-section {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            overflow-y: auto;
+            opacity: 0;
+            visibility: hidden;
+            padding-top: 80px;
+        }
+        .page-section.active {
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.5s ease;
+        }
+
+        #hero {
+            padding-top: 0;
+        }
+        #hero-video {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            z-index: -100;
+            transform: translateX(-50%) translateY(-50%);
+            object-fit: cover;
+        }
+        .hero-gradient-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, rgba(0, 128, 128, 0.4) 0%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 128, 128, 0.6) 100%);
+            z-index: -1;
+        }
+        
+        .service-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .service-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+
+        /* Estilos para el Modal de Reserva */
+        #reserva-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+        }
+        #reserva-modal .modal-bg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+        }
+        #reserva-modal .modal-content {
+            position: relative;
+            background-color: var(--color-blanco);
+            padding: 2rem;
+            border-radius: 0.5rem;
+            width: 90%;
+            max-width: 500px;
+            transform: scale(0.9);
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- NAVEGACIÓN FIJA -->
+    <header class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-black bg-opacity-20 backdrop-blur-sm" id="navbar">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <a href="#" class="text-2xl font-bold text-white font-mono nav-link" data-target="hero">Sensación<span class="text-turquesa">Boogaloo</span></a>
+            <nav class="hidden md:flex space-x-8 items-center">
+                <a href="#" class="text-white hover:text-turquesa transition nav-link" data-target="clases">Clases</a>
+                <a href="#" class="text-white hover:text-turquesa transition nav-link" data-target="servicios">Servicios</a>
+                <a href="#" class="text-white hover:text-turquesa transition nav-link" data-target="horarios">Horarios</a>
+                <a href="#" class="text-white hover:text-turquesa transition nav-link" data-target="nosotros">Nosotros</a>
+                <a href="#" class="text-white hover:text-turquesa transition nav-link" data-target="alumnos-login">Alumnos</a>
+                <a href="#" class="bg-turquesa text-white font-bold py-2 px-4 rounded-full hover:bg-turquesa-dark transition" id="open-reserva-modal">Reservar</a>
+            </nav>
+            <button class="md:hidden text-white" id="mobile-menu-button">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+            </button>
+        </div>
+    </header>
+    
+    <main>
+        <!-- VISTA HERO -->
+        <section id="hero" class="page-section active text-white">
+            <video autoplay muted loop playsinline id="hero-video" poster="https://placehold.co/1920x1080/008080/F0E6D2?text=Sensacion+Boogaloo">
+                <source src="https://assets.mixkit.co/videos/preview/mixkit-a-man-and-a-woman-dancing-salsa-4322-large.mp4" type="video/mp4">
+            </video>
+            <div class="hero-gradient-overlay"></div>
+            <div class="container mx-auto px-6 h-full flex flex-col justify-center items-center text-center pt-20">
+                <h1 class="text-5xl md:text-6xl lg:text-8xl font-extrabold leading-tight mb-4 drop-shadow-lg">El Alma de Limón <br> en cada Paso</h1>
+                <p class="text-lg md:text-xl max-w-3xl mb-8 drop-shadow-md">Descubre la pasión, técnica y alegría en la academia de baile más grande del Caribe. Aprende Salsa y Bachata con un método que te garantiza resultados desde la primera clase.</p>
+                <div>
+                    <a href="#" class="bg-turquesa text-white font-bold py-3 px-8 rounded-full hover:bg-turquesa-dark transition text-lg nav-link" data-target="clases">Descubre Clases</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- VISTA CLASES (Página principal de clases) -->
+        <section id="clases" class="page-section bg-white">
+            <div class="container mx-auto px-6 py-16">
+                <div class="text-center mb-12">
+                    <h2 class="text-4xl md:text-5xl font-bold">Nuestras Clases</h2>
+                    <p class="text-lg mt-2 max-w-2xl mx-auto">Tenemos un plan para cada pasión y cada nivel. Desde principiantes hasta bailarines avanzados.</p>
+                </div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div class="service-card bg-gray-50 rounded-lg overflow-hidden shadow-lg">
+                        <img src="https://placehold.co/600x400/F0E6D2/2D2D2D?text=Clases+Regulares" alt="Clases Regulares" class="w-full h-48 object-cover">
+                        <div class="p-6">
+                            <h3 class="text-2xl font-bold mb-2">Clases Regulares</h3>
+                            <p class="mb-4">Únete a nuestros grupos y aprende a bailar en un ambiente divertido y social.</p>
+                            <a href="#" class="font-bold text-turquesa-dark hover:underline nav-link" data-target="clase-detalle-regulares">Ver Detalles →</a>
+                        </div>
+                    </div>
+                    <div class="service-card bg-gray-50 rounded-lg overflow-hidden shadow-lg">
+                        <img src="https://placehold.co/600x400/40E0D0/FFFFFF?text=Clases+Privadas" alt="Clases Privadas" class="w-full h-48 object-cover">
+                        <div class="p-6">
+                            <h3 class="text-2xl font-bold mb-2">Clases Privadas</h3>
+                            <p class="mb-4">Perfecciona tu estilo o aprende a tu propio ritmo con atención exclusiva.</p>
+                            <a href="#" class="font-bold text-turquesa-dark hover:underline nav-link" data-target="clase-detalle-privadas">Ver Detalles →</a>
+                        </div>
+                    </div>
+                    <div class="service-card bg-gray-50 rounded-lg overflow-hidden shadow-lg">
+                        <img src="https://placehold.co/600x400/2D2D2D/F0E6D2?text=Talleres+Intensivos" alt="Talleres Intensivos" class="w-full h-48 object-cover">
+                        <div class="p-6">
+                            <h3 class="text-2xl font-bold mb-2">Talleres Intensivos</h3>
+                            <p class="mb-4">Lleva tu baile al siguiente nivel con artistas nacionales e internacionales.</p>
+                            <a href="#" class="font-bold text-turquesa-dark hover:underline nav-link" data-target="clase-detalle-talleres">Ver Detalles →</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VISTAS DE DETALLE DE CLASE -->
+        <section id="clase-detalle-regulares" class="page-section bg-white">
+            <div class="container mx-auto px-6 py-16">
+                <h2 class="text-4xl font-bold mb-4">Clases Regulares</h2>
+                <p class="text-lg mb-8">Aquí va la descripción detallada de las clases regulares, paquetes, precios, etc.</p>
+                <a href="#" class="text-turquesa-dark font-bold nav-link" data-target="clases">← Volver a Clases</a>
+            </div>
+        </section>
+        <section id="clase-detalle-privadas" class="page-section bg-white">
+            <div class="container mx-auto px-6 py-16">
+                <h2 class="text-4xl font-bold mb-4">Clases Privadas</h2>
+                <p class="text-lg mb-8">Información sobre instructores, costos por hora, paquetes de clases privadas.</p>
+                <a href="#" class="text-turquesa-dark font-bold nav-link" data-target="clases">← Volver a Clases</a>
+            </div>
+        </section>
+        <section id="clase-detalle-talleres" class="page-section bg-white">
+            <div class="container mx-auto px-6 py-16">
+                <h2 class="text-4xl font-bold mb-4">Talleres Intensivos</h2>
+                <p class="text-lg mb-8">Calendario de próximos talleres, información de artistas invitados, costos de inscripción.</p>
+                <a href="#" class="text-turquesa-dark font-bold nav-link" data-target="clases">← Volver a Clases</a>
+            </div>
+        </section>
+
+        <!-- VISTA SERVICIOS -->
+        <section id="servicios" class="page-section bg-turquesa text-white">
+            <div class="container mx-auto px-6 py-16 flex items-center h-full">
+                <div>
+                    <div class="text-center mb-12">
+                        <h2 class="text-4xl md:text-5xl font-bold">Más que una Academia</h2>
+                        <p class="text-lg mt-2 max-w-2xl mx-auto opacity-90">Llevamos la pasión del baile más allá de nuestras puertas. Descubre cómo podemos ser tu aliado estratégico.</p>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-10 items-center">
+                        <div>
+                            <img src="https://placehold.co/800x600/FFFFFF/2D2D2D?text=Shows+para+Eventos" alt="Shows para Eventos" class="rounded-lg shadow-2xl">
+                        </div>
+                        <div>
+                            <h3 class="text-3xl font-bold mb-4">Shows para Eventos y Empresas</h3>
+                            <p class="mb-4 opacity-90">Dale un toque de energía y elegancia a tu evento corporativo, boda o celebración especial con nuestros shows de baile profesionales.</p>
+                            <h3 class="text-3xl font-bold mb-4 mt-8">Renta de Nuestro Salón</h3>
+                            <p class="mb-4 opacity-90">Nuestro salón de 150m² con espejos, sonido y excelente iluminación está disponible para tus clases, ensayos o eventos.</p>
+                            <a href="#" class="bg-white text-turquesa-dark font-bold py-3 px-6 rounded-full hover:bg-gray-200 transition" id="open-reserva-modal-servicios">Cotizar Ahora</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VISTA HORARIOS -->
+        <section id="horarios" class="page-section">
+            <div class="container mx-auto px-6 py-16">
+                <div class="text-center mb-12">
+                    <h2 class="text-4xl md:text-5xl font-bold">Horarios Flexibles</h2>
+                    <p class="text-lg mt-2 max-w-2xl mx-auto">Encuentra el momento perfecto para bailar. Con 11 opciones, nos adaptamos a tu rutina.</p>
+                </div>
+                <div class="bg-white p-8 rounded-lg shadow-xl max-w-4xl mx-auto">
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-4 text-center font-bold border-b-2 pb-4 mb-4">
+                        <div></div>
+                        <div>Lunes</div>
+                        <div>Martes</div>
+                        <div>Miércoles</div>
+                        <div>Jueves</div>
+                        <div>Viernes</div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-4 items-center mb-4 py-2">
+                        <div class="font-bold text-right pr-4">6:00 PM</div>
+                        <div class="text-center"><div class="bg-turquesa text-white text-sm py-1 px-2 rounded-lg">Salsa Nivel 1</div></div>
+                        <div class="text-center"><div class="bg-turquesa-dark text-white text-sm py-1 px-2 rounded-lg">Bachata Nivel 1</div></div>
+                        <div class="text-center"><div class="bg-turquesa text-white text-sm py-1 px-2 rounded-lg">Salsa Nivel 1</div></div>
+                        <div class="text-center"><div class="bg-turquesa-dark text-white text-sm py-1 px-2 rounded-lg">Bachata Nivel 1</div></div>
+                        <div class="text-center"><div class="bg-gray-200 text-gray-500 text-sm py-1 px-2 rounded-lg">Práctica Libre</div></div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-4 items-center mb-4 py-2 bg-gray-50 rounded-lg">
+                        <div class="font-bold text-right pr-4">7:00 PM</div>
+                        <div class="text-center"><div class="bg-turquesa text-white text-sm py-1 px-2 rounded-lg">Salsa Nivel 2</div></div>
+                        <div class="text-center"><div class="bg-turquesa-dark text-white text-sm py-1 px-2 rounded-lg">Bachata Nivel 2</div></div>
+                        <div class="text-center"><div class="bg-turquesa text-white text-sm py-1 px-2 rounded-lg">Salsa Nivel 2</div></div>
+                        <div class="text-center"><div class="bg-turquesa-dark text-white text-sm py-1 px-2 rounded-lg">Bachata Nivel 2</div></div>
+                        <div class="text-center"><div class="bg-gray-200 text-gray-500 text-sm py-1 px-2 rounded-lg">Práctica Libre</div></div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-4 items-center mb-4 py-2">
+                        <div class="font-bold text-right pr-4">8:00 PM</div>
+                        <div class="text-center"><div class="bg-turquesa text-white text-sm py-1 px-2 rounded-lg">Coreográfico</div></div>
+                        <div class="text-center"></div>
+                        <div class="text-center"><div class="bg-turquesa text-white text-sm py-1 px-2 rounded-lg">Coreográfico</div></div>
+                        <div class="text-center"></div>
+                        <div class="text-center"><div class="bg-gray-200 text-gray-500 text-sm py-1 px-2 rounded-lg">Social</div></div>
+                    </div>
+                    <div class="text-center mt-8">
+                        <a href="#" class="bg-turquesa-dark text-white font-bold py-3 px-8 rounded-full hover:bg-texto-oscuro transition text-lg" id="open-reserva-modal-horarios">Inscríbete Ahora</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VISTA NOSOTROS -->
+        <section id="nosotros" class="page-section bg-white">
+            <div class="container mx-auto px-6 py-16 flex items-center h-full">
+                <div class="grid md:grid-cols-2 gap-16 items-center">
+                    <div>
+                        <h2 class="text-4xl md:text-5xl font-bold mb-6">Nacimos de la Pasión, <br>Crecimos con la Técnica</h2>
+                        <p class="text-lg mb-4">Fundada en el corazón de Limón, nuestra academia es el sueño de [Nombre del Fundador/a], un/a bailarín/a con más de [X] años de experiencia. Nuestra misión es simple: compartir el poder transformador del baile, creando una comunidad donde todos puedan encontrar un espacio para aprender, crecer y disfrutar.</p>
+                        <p class="text-lg">Creemos en la disciplina, pero también en la diversión. En la técnica, pero también en la expresión. Somos más que instructores; somos mentores, amigos y tu familia en el mundo del baile.</p>
+                    </div>
+                    <div>
+                        <img src="https://placehold.co/800x1000/F0E6D2/2D2D2D?text=Foto+del+Equipo" alt="Equipo de la academia" class="rounded-lg shadow-2xl">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VISTA LOGIN ALUMNOS -->
+        <section id="alumnos-login" class="page-section bg-gray-100 flex justify-center items-center">
+            <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
+                <h2 class="text-2xl font-bold text-center mb-6">Portal de Alumnos</h2>
+                <form id="login-form">
+                    <div class="mb-4">
+                        <label for="username" class="block text-sm font-medium text-gray-700">Usuario</label>
+                        <input type="text" id="username" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-turquesa focus:border-turquesa" required>
+                    </div>
+                    <div class="mb-6">
+                        <label for="password" class="block text-sm font-medium text-gray-700">Contraseña</label>
+                        <input type="password" id="password" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-turquesa focus:border-turquesa" required>
+                    </div>
+                    <p id="login-error" class="text-red-500 text-sm mb-4 hidden">Usuario o contraseña incorrectos.</p>
+                    <button type="submit" class="w-full bg-turquesa-dark text-white font-bold py-2 px-4 rounded-full hover:bg-texto-oscuro transition">Ingresar</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- VISTA DASHBOARD ALUMNOS -->
+        <section id="alumnos-dashboard" class="page-section bg-gray-100">
+            <div class="container mx-auto px-6 py-16">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-3xl font-bold">Bienvenido, Test</h2>
+                    <a href="#" class="text-sm text-gray-600 hover:underline" id="logout-button">Cerrar Sesión</a>
+                </div>
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <h3 class="text-xl font-bold mb-4">Mis Próximas Clases</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clase</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap">Salsa Nivel 1</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">Lunes, 11 Ago 2025</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">6:00 PM</td>
+                                    <td class="px-6 py-4 whitespace-nowrap"><a href="#" class="text-turquesa-dark hover:underline">Reprogramar</a></td>
+                                </tr>
+                                <!-- Más filas de clases -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL DE RESERVA -->
+    <div id="reserva-modal">
+        <div class="modal-bg" id="close-reserva-modal"></div>
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4">Reservar una Clase</h2>
+            <form>
+                <div class="mb-4">
+                    <label for="reserva-nombre" class="block text-sm font-medium text-gray-700">Nombre Completo</label>
+                    <input type="text" id="reserva-nombre" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                </div>
+                <div class="mb-4">
+                    <label for="reserva-clase" class="block text-sm font-medium text-gray-700">Tipo de Clase</label>
+                    <select id="reserva-clase" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+                        <option>Clase Regular - Salsa Nivel 1</option>
+                        <option>Clase Regular - Bachata Nivel 1</option>
+                        <option>Clase Privada</option>
+                    </select>
+                </div>
+                <div class="mb-6">
+                    <label for="reserva-horario" class="block text-sm font-medium text-gray-700">Horario Deseado</label>
+                    <input type="datetime-local" id="reserva-horario" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+                </div>
+                <button type="submit" class="w-full bg-turquesa text-white font-bold py-2 px-4 rounded-full hover:bg-turquesa-dark">Confirmar Reserva</button>
+            </form>
+        </div>
+    </div>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Lógica de Navegación ---
+        const navLinks = document.querySelectorAll('.nav-link');
+        let currentSection = 'hero';
+
+        function switchView(targetId) {
+            if (targetId === currentSection) return;
+            const current = document.getElementById(currentSection);
+            const target = document.getElementById(targetId);
+            if (!target) return;
+
+            gsap.to(current, { 
+                opacity: 0, 
+                duration: 0.3,
+                onComplete: () => {
+                    current.classList.remove('active');
+                    target.classList.add('active');
+                    gsap.to(target, { opacity: 1, duration: 0.3 });
+                    currentSection = targetId;
+                }
+            });
+        }
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetId = link.getAttribute('data-target');
+                switchView(targetId);
+            });
+        });
+
+        // --- Lógica del Modal de Reserva ---
+        const reservaModal = document.getElementById('reserva-modal');
+        const openReservaModalBtn = document.getElementById('open-reserva-modal');
+        const openReservaModalBtn2 = document.getElementById('open-reserva-modal-servicios');
+        const openReservaModalBtn3 = document.getElementById('open-reserva-modal-horarios');
+        const closeReservaModalBtn = document.getElementById('close-reserva-modal');
+
+        function openModal() {
+            gsap.to(reservaModal, { autoAlpha: 1, duration: 0.3 });
+            gsap.to('.modal-content', { scale: 1, duration: 0.3, delay: 0.1 });
+        }
+        function closeModal() {
+            gsap.to('.modal-content', { scale: 0.9, duration: 0.2 });
+            gsap.to(reservaModal, { autoAlpha: 0, duration: 0.2, delay: 0.1 });
+        }
+
+        openReservaModalBtn.addEventListener('click', openModal);
+        openReservaModalBtn2.addEventListener('click', openModal);
+        openReservaModalBtn3.addEventListener('click', openModal);
+        closeReservaModalBtn.addEventListener('click', closeModal);
+
+        // --- Lógica de Login de Alumnos ---
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
+        const logoutButton = document.getElementById('logout-button');
+
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (username === 'test' && password === '123') {
+                loginError.classList.add('hidden');
+                switchView('alumnos-dashboard');
+            } else {
+                loginError.classList.remove('hidden');
+            }
+        });
+        
+        logoutButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            switchView('alumnos-login');
+            loginForm.reset(); // Limpiar el formulario al salir
+        });
+
+    });
+    </script>
+
+</body>
+</html>
+
