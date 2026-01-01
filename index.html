@@ -1011,15 +1011,20 @@
                         { id: 3, year: "100%", title: "Certificación", sub: "Instructores Titulados", icon: "fa-certificate", color: "gold" },
                         { id: 4, year: "500+", title: "Alumnos Graduados", sub: "Comunidad Activa", icon: "fa-users", color: "neon" }
                     ]
+                },
 
-
-
+                finanzas: {
+                    ivaRate: 0.13, // 13% Costa Rica
+                    pricesIncludeIva: false, // false = Precio + IVA, true = IVA incluido
+                    currency: 'CRC'
                 }
+
             },
 
             mensajes: [],// { id, studentId, text, reply, date, read }
             reservas: [], 
             sesiones: [],
+            
             clases: [
                 { 
                     id: 1, 
@@ -1352,14 +1357,34 @@
             solicitudes: [
                 // { id, type: 'Talento'|'Staff', name, phone, email, dob, idNum, address, experience, cvLink, date, read: false, target: 'Salsa Pro' }
             ],
+
+            cuentas: [
+                { id: '100', name: 'Activos Corrientes', type: 'asset' },
+                { id: '101', name: 'Banco Nacional (Efectivo)', type: 'asset', parent: '100' },
+                { id: '102', name: 'Sinpe Móvil (Por Conciliar)', type: 'asset', parent: '100' },
+                
+                { id: '400', name: 'Ingresos Operativos', type: 'income' },
+                { id: '401', name: 'Membresías', type: 'income', parent: '400' },
+                { id: '402', name: 'Clases Sueltas', type: 'income', parent: '400' },
+                { id: '403', name: 'Eventos y Alquileres', type: 'income', parent: '400' },
+
+                { id: '500', name: 'Costos Directos (Ventas)', type: 'cost' },
+                { id: '501', name: 'Pago Profesores (Planilla)', type: 'cost', parent: '500' },
+                { id: '502', name: 'Costo Eventos', type: 'cost', parent: '500' },
+
+                { id: '600', name: 'Gastos Operativos', type: 'expense' },
+                { id: '601', name: 'Alquiler Local', type: 'expense', parent: '600' },
+                { id: '602', name: 'Servicios Públicos (Luz/Agua/Net)', type: 'expense', parent: '600' },
+                { id: '603', name: 'Mantenimiento', type: 'expense', parent: '600' },
+                { id: '604', name: 'Marketing y Pauta', type: 'expense', parent: '600' },
+                { id: '605', name: 'Software y Licencias', type: 'expense', parent: '600' }
+            ],
+
+            // --- LIBRO DIARIO (LEDGER) ---
+            // { id, date, accountId, detail, debit, credit, status (approved/pending), proofImg, studentId }
+            transacciones: [],
             
-            finanzas: [
-                { id: 1, concept: "Pago Mensualidad (Ana S.)", type: "ingreso", amount: "35000" },
-                { id: 2, concept: "Clase Suelta (Visita)", type: "ingreso", amount: "5000" },
-                { id: 3, concept: "Pago Alquiler Local", type: "gasto", amount: "-450000" },
-                { id: 4, concept: "Tiquetera (Carlos V.)", type: "ingreso", amount: "28000" },
-                { id: 5, concept: "Mantenimiento A/C", type: "gasto", amount: "-25000" }
-            ]
+        
         };
         // =================================================================
         // 2. GESTOR DE DATOS (DATA MANAGER - CON PERSISTENCIA)
@@ -1405,6 +1430,71 @@
                 root.style.setProperty('--color-text-muted', c.textMuted);
             }
         };
+
+// =================================================================
+        // SISTEMA CONTABLE
+        // =================================================================
+
+        const FinanceManager = {
+            // Calcular Precio Final
+            getPrice(amount) {
+                const conf = DataManager.get().config.finanzas;
+                const base = parseFloat(amount);
+                if (isNaN(base)) return { base: 0, tax: 0, total: 0 };
+
+                let tax = 0;
+                let total = base;
+
+                if (conf.pricesIncludeIva) {
+                    // Si 25000 incluye IVA: Base = 25000 / 1.13
+                    const realBase = base / (1 + conf.ivaRate);
+                    tax = base - realBase;
+                    total = base;
+                    return { base: realBase, tax: tax, total: total, display: total };
+                } else {
+                    // Si 25000 es + IVA: Total = 25000 * 1.13
+                    tax = base * conf.ivaRate;
+                    total = base + tax;
+                    return { base: base, tax: tax, total: total, display: total };
+                }
+            },
+
+            // Formatear Moneda
+            fmt(amount) {
+                return '₡' + parseFloat(amount).toLocaleString('es-CR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            },
+
+            // Registrar Transacción (CORREGIDO)
+            addTransaction(type, accountId, amount, detail, status = 'approved', proof = null, studentId = null, metadata = null) {
+                const d = DataManager.get();
+                const calc = this.getPrice(amount);
+                
+                d.transacciones.push({
+                    id: Date.now(),
+                    date: new Date().toISOString(),
+                    accountId: accountId,
+                    detail: detail,
+                    amount: calc.base, 
+                    tax: calc.tax,     
+                    total: calc.total, 
+                    status: status,    
+                    proof: proof,      
+                    studentId: studentId,
+                    method: proof ? 'sinpe' : 'card',
+                    metadata: metadata // <--- AHORA SÍ SE GUARDA CORRECTAMENTE
+                });
+                
+                DataManager.save(d);
+            }
+        };
+
+
+
+
+
+
+
+
 
         // =================================================================
         // 3. APP PRINCIPAL (PUBLIC VIEW)
@@ -1759,7 +1849,7 @@
                                         <button onclick="App.openMembershipDetails(${m.id})" class="btn-galaxy w-full py-4 rounded-lg font-bold text-[10px] uppercase tracking-[0.2em] shadow-lg hover:scale-105 transition-transform">
                                             EXPLORAR BENEFICIOS
                                         </button>
-                                        <button onclick="App.openSubscriptionModal(${m.id}, '${m.name}')" class="w-full py-3 rounded-lg font-bold text-[10px] uppercase tracking-[0.2em] border border-white/10 hover:bg-white hover:text-black transition-colors text-white">
+                                        <button onclick="App.openPaymentModal('membresia', ${m.id}, '${m.name}', '${m.priceCRC}')" class="w-full py-3 rounded-lg font-bold text-[10px] uppercase tracking-[0.2em] border border-white/10 hover:bg-white hover:text-black transition-colors text-white">
                                             SUSCRIBIRSE AHORA
                                         </button>
                                         ${m.legal ? `<p class="text-[9px] text-gray-600 text-center mt-4 italic">${m.legal}</p>` : ''}
@@ -2859,70 +2949,248 @@
             },
 
             // --- GESTIÓN DE SUSCRIPCIÓN (MODAL FORMULARIO) ---
-            openSubscriptionModal(planId, planName) {
+            
+            openPaymentModal(itemType, itemId, itemName, price) {
+                const d = DataManager.get();
+                const conf = d.config.finanzas;
+                const calc = FinanceManager.getPrice(price);
+                const taxLabel = conf.pricesIncludeIva ? 'I.V.I.' : '+ I.V.A.';
+                
+                // Obtener número SINPE del Admin (o default)
+                const adminUser = d.alumnos.find(a => a.role === 'admin');
+                const sinpeNumber = adminUser ? adminUser.phone : "8888-8888";
+
+                // Verificar si hay usuario logueado para autocompletar
+                const currentUserId = sessionStorage.getItem('current_user_id');
+                const user = d.alumnos.find(a => a.id === currentUserId) || {};
+
                 const html = `
-                    <div class="space-y-4">
-                        <div class="bg-gold/10 p-4 rounded-lg border border-gold text-center">
-                            <p class="text-[10px] text-gold uppercase font-bold tracking-widest">Aplicando a:</p>
-                            <h3 class="text-xl font-serif text-white mt-1">${planName}</h3>
-                        </div>
+                    <div class="flex flex-col h-full bg-[#05060b]">
                         
-                        <div>
-                            <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Cédula (Será tu Usuario)</label>
-                            <input type="text" id="sub-id" class="w-full bg-black border border-white/10 p-3 rounded text-white outline-none focus:border-gold font-mono tracking-wider" placeholder="Ej. 118540678">
-                        </div>
-
-                        <div>
-                            <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Nombre Completo</label>
-                            <input type="text" id="sub-name" class="w-full bg-black border border-white/10 p-3 rounded text-white outline-none focus:border-gold" placeholder="Nombre y Apellidos">
-                        </div>
-                        
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Teléfono</label>
-                                <input type="tel" id="sub-phone" class="w-full bg-black border border-white/10 p-3 rounded text-white outline-none focus:border-gold" placeholder="8888-8888">
-                            </div>
-                            <div>
-                                <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Fecha Nacimiento</label>
-                                <input type="date" id="sub-birth" class="w-full bg-black border border-white/10 p-3 rounded text-white outline-none focus:border-gold relative z-10" onchange="this.blur()">
+                        <div class="p-6 border-b border-white/10 bg-white/5 shrink-0">
+                            <span class="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">Orden de Compra</span>
+                            <h2 class="text-2xl font-serif font-bold text-white mb-2">${itemName}</h2>
+                            <div class="flex justify-between items-end border-t border-white/10 pt-4 mt-2">
+                                <div class="text-xs text-gray-400">
+                                    <p>Subtotal: ${FinanceManager.fmt(calc.base)}</p>
+                                    <p>I.V.A. (13%): ${FinanceManager.fmt(calc.tax)}</p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-3xl font-bold text-gold">${FinanceManager.fmt(calc.total)}</span>
+                                    <span class="text-[9px] text-gold uppercase font-bold block">${taxLabel}</span>
+                                </div>
                             </div>
                         </div>
 
-                        <div>
-                            <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Correo Electrónico</label>
-                            <input type="email" id="sub-email" class="w-full bg-black border border-white/10 p-3 rounded text-white outline-none focus:border-gold" placeholder="correo@ejemplo.com">
+                        <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                            
+                            <div class="space-y-4">
+                                <h4 class="text-gold text-xs font-bold uppercase tracking-widest border-b border-white/10 pb-2">Información de Facturación</h4>
+                                
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Cédula / ID</label>
+                                        <input type="text" id="pay-student-id" class="w-full bg-black border border-white/10 p-3 rounded text-white text-xs outline-none focus:border-gold font-mono" placeholder="ID Oficial" value="${user.id || ''}" ${user.id ? 'readonly' : ''}>
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Fecha Nacimiento</label>
+                                        <input type="date" id="pay-student-dob" class="w-full bg-black border border-white/10 p-3 rounded text-white text-xs outline-none focus:border-gold text-gray-400" value="${user.birthDate || ''}">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Nombre Completo</label>
+                                    <input type="text" id="pay-student-name" class="w-full bg-black border border-white/10 p-3 rounded text-white text-xs outline-none focus:border-gold" placeholder="Nombre y Apellidos" value="${user.name || ''}">
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Teléfono</label>
+                                        <input type="tel" id="pay-student-phone" class="w-full bg-black border border-white/10 p-3 rounded text-white text-xs outline-none focus:border-gold" placeholder="8888-8888" value="${user.phone || ''}">
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Email</label>
+                                        <input type="email" id="pay-student-email" class="w-full bg-black border border-white/10 p-3 rounded text-white text-xs outline-none focus:border-gold" placeholder="correo@ejemplo.com" value="${user.email || ''}">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="text-[10px] text-gray-500 uppercase font-bold block mb-1">Dirección / Residencia</label>
+                                    <input type="text" id="pay-student-address" class="w-full bg-black border border-white/10 p-3 rounded text-white text-xs outline-none focus:border-gold" placeholder="Provincia, Cantón, Distrito...">
+                                </div>
+                            </div>
+
+                            <div class="space-y-4">
+                                <h4 class="text-gold text-xs font-bold uppercase tracking-widest border-b border-white/10 pb-2">Método de Pago</h4>
+
+                                <div class="border border-white/10 rounded-xl overflow-hidden transition-colors" id="container-card">
+                                    <div class="p-4 flex items-center gap-3 cursor-pointer hover:bg-white/5" onclick="App.selectPaymentMethod('card')">
+                                        <input type="radio" name="payMethod" id="opt-card" value="card" class="accent-gold w-4 h-4 cursor-pointer">
+                                        <label class="text-sm font-bold text-white cursor-pointer flex-1">Tarjeta de Crédito / Débito</label>
+                                        <div class="flex gap-2 text-gray-400">
+                                            <i class="fa-brands fa-cc-visa text-xl"></i>
+                                            <i class="fa-brands fa-cc-mastercard text-xl"></i>
+                                        </div>
+                                    </div>
+                                    <div class="hidden px-4 pb-4 pl-9 space-y-3 bg-black/20 pt-2 border-t border-white/5" id="details-card">
+                                        <input type="text" class="w-full bg-black border border-white/20 rounded p-3 text-xs text-white" placeholder="Número de Tarjeta">
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <input type="text" class="w-full bg-black border border-white/20 rounded p-3 text-xs text-white" placeholder="MM/YY">
+                                            <input type="text" class="w-full bg-black border border-white/20 rounded p-3 text-xs text-white" placeholder="CVC">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="border border-white/10 rounded-xl overflow-hidden transition-colors" id="container-sinpe">
+                                    <div class="p-4 flex items-center gap-3 cursor-pointer hover:bg-white/5" onclick="App.selectPaymentMethod('sinpe')">
+                                        <input type="radio" name="payMethod" id="opt-sinpe" value="sinpe" class="accent-success w-4 h-4 cursor-pointer">
+                                        <label class="text-sm font-bold text-white cursor-pointer flex-1">Sinpe Móvil</label>
+                                        <span class="text-success text-[10px] font-bold border border-success px-2 rounded">MANUAL</span>
+                                    </div>
+                                    <div class="hidden px-4 pb-4 pl-9 text-xs text-gray-400 bg-black/20 pt-2 border-t border-white/5" id="details-sinpe">
+                                        <p class="mb-2">1. Realiza el Sinpe al: <strong class="text-white text-base">${sinpeNumber}</strong></p>
+                                        <p class="mb-3">2. Sube la captura del comprobante:</p>
+                                        <label class="block w-full border border-dashed border-white/30 rounded-lg p-4 text-center hover:bg-white/5 cursor-pointer transition-all bg-black">
+                                            <span id="proof-name" class="text-gray-500"><i class="fa-solid fa-cloud-arrow-up text-lg block mb-1"></i> Adjuntar Comprobante</span>
+                                            <input type="file" id="pay-proof" class="hidden" accept="image/*" onchange="App.processFile(this)">
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <button onclick="App.processSubscription(${planId})" class="btn-galaxy w-full py-4 rounded-xl font-bold mt-6 shadow-lg text-xs uppercase tracking-widest text-black hover:scale-105 transition-transform">
-                            CONFIRMAR INSCRIPCIÓN
-                        </button>
-                        <p class="text-[9px] text-gray-600 text-center mt-2">Tu contraseña será: <strong>sensacion</strong></p>
+                        <div class="p-6 pt-4 border-t border-white/10 bg-[#05060b] shrink-0 z-20">
+                            <button onclick="App.processPayment('${itemType}', ${itemId}, '${price}')" class="btn-galaxy w-full py-4 rounded-xl font-bold uppercase tracking-widest text-black text-xs shadow-lg hover:scale-[1.01] transition-transform">
+                                CONFIRMAR PAGO
+                            </button>
+                            <p class="text-[9px] text-center text-gray-600 mt-3 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-lock"></i> Transacción Encriptada 256-bit SSL
+                            </p>
+                        </div>
                     </div>
                 `;
-                
-                // 1. Buscamos el contenedor principal
-                const modal = document.getElementById('modal');
-                
-                // 2. Buscamos los elementos por sus NUEVOS IDs ÚNICOS
+
                 const title = document.getElementById('uni-modal-title');
                 const body = document.getElementById('uni-modal-body');
+                const modal = document.getElementById('modal');
 
-                if(modal && title && body) {
-                    title.innerText = "Registro de Alumno"; 
-                    body.innerHTML = html; 
+                if(title && body) {
+                    title.innerText = "PASARELA DE PAGO";
+                    body.innerHTML = html;
+                    body.className = "flex-1 flex flex-col overflow-hidden p-0 bg-transparent"; 
                     
                     modal.classList.remove('hidden');
+                    modal.classList.add('modal-fixed-layout');
+                    
                     setTimeout(() => {
                         modal.classList.remove('opacity-0');
-                        // Forzamos visualización completa en móvil
-                        const panel = modal.querySelector('#modal-panel');
-                        if(panel) panel.classList.remove('scale-95');
+                        modal.querySelector('#modal-panel').classList.remove('scale-95');
                     }, 10);
-                } else {
-                    console.error("Error crítico: No se encontraron los elementos 'uni-modal-title' o 'uni-modal-body'. Verifica el HTML.");
                 }
             },
 
+            // FUNCIÓN HELPER PARA EL ACORDEÓN
+            selectPaymentMethod(method) {
+                // 1. Marcar el radio button
+                document.getElementById(`opt-${method}`).checked = true;
+
+                // 2. Gestionar Clases Visuales (Bordes)
+                document.getElementById('container-card').classList.remove('border-gold', 'bg-white/5');
+                document.getElementById('container-sinpe').classList.remove('border-gold', 'bg-white/5');
+                
+                document.getElementById(`container-${method}`).classList.add('border-gold', 'bg-white/5');
+
+                // 3. Gestionar Colapso (Acordeón)
+                document.getElementById('details-card').classList.add('hidden');
+                document.getElementById('details-sinpe').classList.add('hidden');
+                
+                document.getElementById(`details-${method}`).classList.remove('hidden');
+            },
+
+            // --- REEMPLAZAR EN APP ---
+            processPayment(itemType, itemId, rawPrice) {
+                // Validar método seleccionado
+                const cardChecked = document.getElementById('opt-card').checked;
+                const sinpeChecked = document.getElementById('opt-sinpe').checked;
+                
+                if (!cardChecked && !sinpeChecked) {
+                    return Swal.fire({icon:'warning', title:'Método de Pago', text:'Por favor selecciona Tarjeta o Sinpe.'});
+                }
+
+                const method = cardChecked ? 'card' : 'sinpe';
+                
+                // Recolección de Datos Cliente
+                const studentId = document.getElementById('pay-student-id').value.trim();
+                const name = document.getElementById('pay-student-name').value.trim();
+                const phone = document.getElementById('pay-student-phone').value.trim();
+                const email = document.getElementById('pay-student-email').value.trim();
+                const dob = document.getElementById('pay-student-dob').value;
+                const address = document.getElementById('pay-student-address').value;
+                
+                // Validación Estricta
+                if(!studentId || !name || !phone || !email) {
+                    return Swal.fire({icon:'warning', title:'Datos Faltantes', text:'Cédula, Nombre, Teléfono y Email son obligatorios.'});
+                }
+
+                const d = DataManager.get();
+                let alumno = d.alumnos.find(a => a.id === studentId);
+
+                // CREAR O ACTUALIZAR ALUMNO
+                if(!alumno) {
+                    // Nuevo Usuario
+                    alumno = { 
+                        id: studentId, 
+                        name: name, 
+                        role: 'student', 
+                        phone: phone,
+                        email: email,
+                        birthDate: dob,
+                        address: address, // Nuevo campo en BD
+                        joinDate: new Date().toISOString(), 
+                        planId: null, 
+                        extraCredits: 0, 
+                        active: true, 
+                        pass: 'sensacion' 
+                    };
+                    d.alumnos.push(alumno);
+                } else {
+                    // Actualizar datos existentes (por si cambió teléfono o dirección)
+                    alumno.phone = phone;
+                    alumno.email = email;
+                    if(dob) alumno.birthDate = dob;
+                    if(address) alumno.address = address;
+                }
+                
+                // Guardamos los datos del usuario actualizados antes de procesar el pago
+                DataManager.save(d);
+
+                const meta = { type: itemType, id: itemId };
+
+                if (method === 'card') {
+                    // PAGO TARJETA
+                    FinanceManager.addTransaction('income', '401', rawPrice, `Pago Tarjeta: ${itemType}`, 'approved', null, studentId, meta);
+                    this.activateService(studentId, meta); 
+                    
+                    Swal.fire({icon: 'success', title: '¡Pago Exitoso!', text: 'Tu plan está activo.', confirmButtonColor: '#D4AF37'})
+                    .then(() => { 
+                        this.closeModal(); 
+                        sessionStorage.setItem('current_user_id', studentId); 
+                        sessionStorage.setItem('app_role', 'alumno');
+                        location.reload(); 
+                    });
+
+                } else {
+                    // PAGO SINPE
+                    if(!this.tempFileData) return Swal.fire({icon:'warning', title:'Comprobante Requerido', text:'Sube la foto del Sinpe.'});
+                    
+                    FinanceManager.addTransaction('income', '402', rawPrice, `Sinpe Móvil: ${itemType}`, 'pending', this.tempFileData, studentId, meta);
+                    this.tempFileData = null; 
+
+                    Swal.fire({icon: 'info', title: 'Pago en Revisión', text: 'Tu plan se activará cuando el Admin apruebe el comprobante.', confirmButtonColor: '#D4AF37'})
+                    .then(() => this.closeModal());
+                }
+            },
+            
             processSubscription(planId) {
                 const id = document.getElementById('sub-id').value.trim();
                 const name = document.getElementById('sub-name').value.trim();
@@ -3632,30 +3900,70 @@
                 document.body.style.overflow = 'hidden';
             },
 
-            // --- PEGAR EN APP (NUEVA FUNCIÓN HELPER) ---
+            // ----GESTION DE ARCHIVOS
             processFile(input) {
                 const file = input.files[0];
                 if (!file) return;
                 
-                // Protección: Máximo 2MB para no saturar la memoria local
+                // Validación de seguridad (2MB)
                 if (file.size > 2 * 1024 * 1024) {
-                    Swal.fire({icon: 'warning', title: 'Archivo muy pesado', text: 'Para esta demo local, usa archivos menores a 2MB.'});
-                    input.value = ''; // Limpiar
+                    Swal.fire({icon: 'warning', title: 'Archivo muy pesado', text: 'Intenta con una imagen más ligera (Máx 2MB).', background: '#000', color: '#fff'});
+                    input.value = ''; 
                     return;
                 }
 
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    // Guardamos los datos binarios en una variable temporal
+                    // 1. Guardamos la data (Base64) en memoria temporal para enviarla al guardar
                     this.tempFileData = e.target.result;
-                    // Actualizamos el texto visualmente
-                    const label = document.getElementById('file-name-display');
-                    if(label) {
-                        label.innerHTML = `<i class="fa-solid fa-check text-gold"></i> ${file.name}`;
-                        label.classList.add('text-gold');
+
+                    // 2. ACTUALIZACIÓN VISUAL (DETECTAR DÓNDE ESTOY)
+                    
+                    // A. CASO MODAL TALENTO (Buscamos el ID del PDF)
+                    const labelAudition = document.getElementById('file-name-display');
+                    if(labelAudition) {
+                        labelAudition.innerHTML = `<i class="fa-solid fa-check text-gold"></i> ${file.name}`;
+                        labelAudition.classList.add('text-gold');
+                    }
+
+                    // B. CASO MODAL PAGOS (Buscamos el ID del Comprobante)
+                    const labelPayment = document.getElementById('proof-name');
+                    if(labelPayment) {
+                        // Mostramos la imagen en pequeñito (Thumbnail)
+                        labelPayment.innerHTML = `
+                            <div class="flex flex-col items-center animate-fade-in">
+                                <img src="${e.target.result}" class="h-24 w-auto rounded-lg border-2 border-gold mb-2 object-cover shadow-lg">
+                                <span class="text-gold text-[10px] font-bold uppercase tracking-widest"><i class="fa-solid fa-check-circle"></i> Comprobante Cargado</span>
+                            </div>
+                        `;
+                        // Pintamos el borde del contenedor padre para feedback visual
+                        labelPayment.parentElement.classList.add('border-gold', 'bg-gold/5');
+                        labelPayment.parentElement.classList.remove('border-white/30');
                     }
                 };
                 reader.readAsDataURL(file);
+            },
+
+            // --- PEGAR EN APP (LÓGICA DE NEGOCIO) ---
+            activateService(studentId, metadata) {
+                if (!metadata) return; // Si es un gasto o ingreso vario, no hace nada
+                
+                const d = DataManager.get();
+                const alumno = d.alumnos.find(a => a.id === studentId);
+                
+                if (alumno) {
+                    if (metadata.type === 'membresia') {
+                        // ACTIVAR PLAN
+                        alumno.planId = metadata.id;
+                        // Opcional: Reiniciar fecha de inicio del plan, etc.
+                        Swal.fire({icon: 'success', title: 'Membresía Activada', text: `El plan se ha asignado a ${alumno.name}`});
+                    } 
+                    else if (metadata.type === 'tiquetera') {
+                        // SUMAR CLASES (Ejemplo para tiquetera)
+                        alumno.extraCredits = (alumno.extraCredits || 0) + metadata.qty;
+                    }
+                    DataManager.save(d);
+                }
             },
 
 
@@ -3890,7 +4198,7 @@
                         else if(tabId === 'alumnos') this.renderAlumnosEditor(target);
                         else if(tabId === 'espacios') this.renderEspaciosEditor(target);
                         else if(tabId === 'talento') this.renderTalentoEditor(target);
-                        else if(tabId === 'finanzas') target.innerHTML = this.genGenericTable(tabId); // Placeholder temporal
+                        else if(tabId === 'finanzas') this.renderFinanzasEditor(target);
                         else if(tabId === 'config') target.innerHTML = this.genConfig();
                         else target.innerHTML = this.genGenericTable(tabId);
                     } catch (e) {
@@ -6241,6 +6549,285 @@
                     showConfirmButton: false
                 });
             },
+
+            // --- PEGAR EN ADMIN (ERP FINANCIERO COMPLETO) ---
+            renderFinanzasEditor(container) {
+                if(!container) return;
+                const d = DataManager.get();
+                const trans = d.transacciones || [];
+                const pending = trans.filter(t => t.status === 'pending');
+                const approved = trans.filter(t => t.status === 'approved');
+
+                // KPIs Rápidos
+                const totalIncome = approved.reduce((a, b) => a + (b.total || 0), 0); // Total Bruto
+                const totalTax = approved.reduce((a, b) => a + (b.tax || 0), 0);     // Total IVA
+                
+                // Helper de fechas para filtros (Mes Actual Default)
+                const now = new Date();
+                const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+                container.innerHTML = `
+                    <div class="max-w-7xl mx-auto pb-20 fade-in">
+                        
+                        <div class="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
+                            <div>
+                                <h1 class="text-3xl font-serif font-bold text-white">Dirección Financiera</h1>
+                                <p class="text-gray-400 text-sm mt-1">Control de tesorería, impuestos y resultados.</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="Admin.renderTab('finanzas')" class="bg-white/10 hover:bg-gold hover:text-black text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors"><i class="fa-solid fa-rotate"></i> ACTUALIZAR</button>
+                                <button onclick="Admin.addExpenseModal()" class="btn-galaxy px-6 py-2 rounded-lg text-xs font-bold shadow-lg"><i class="fa-solid fa-minus-circle"></i> REGISTRAR GASTO</button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                            <div class="bg-panel p-5 rounded-xl border border-white/10 relative overflow-hidden">
+                                <div class="text-[10px] uppercase text-gray-500 font-bold mb-1">Ingresos Brutos (Mes)</div>
+                                <div class="text-2xl font-bold text-white">${FinanceManager.fmt(totalIncome)}</div>
+                                <div class="absolute right-0 top-0 p-4 opacity-10"><i class="fa-solid fa-sack-dollar text-4xl text-white"></i></div>
+                            </div>
+                            <div class="bg-panel p-5 rounded-xl border border-white/10 relative overflow-hidden">
+                                <div class="text-[10px] uppercase text-gray-500 font-bold mb-1">Impuestos Recaudados</div>
+                                <div class="text-2xl font-bold text-neon">${FinanceManager.fmt(totalTax)}</div>
+                                <div class="absolute right-0 top-0 p-4 opacity-10"><i class="fa-solid fa-landmark text-4xl text-neon"></i></div>
+                            </div>
+                            <div class="bg-panel p-5 rounded-xl border border-white/10 relative overflow-hidden">
+                                <div class="text-[10px] uppercase text-gray-500 font-bold mb-1">Por Conciliar (Sinpe)</div>
+                                <div class="text-2xl font-bold text-rose-500">${pending.length}</div>
+                                <div class="absolute right-0 top-0 p-4 opacity-10"><i class="fa-solid fa-file-invoice text-4xl text-rose-500"></i></div>
+                            </div>
+                            <div class="bg-panel p-5 rounded-xl border border-white/10 relative overflow-hidden">
+                                <div class="text-[10px] uppercase text-gray-500 font-bold mb-1">Configuración Fiscal</div>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-xs bg-white/10 px-2 py-1 rounded text-gold border border-gold/30">IVA: ${(d.config.finanzas.ivaRate * 100)}%</span>
+                                    <span class="text-[9px] text-gray-400">${d.config.finanzas.pricesIncludeIva ? 'Incluido' : '+ Impuesto'}</span>
+                                </div>
+                                <button onclick="Admin.toggleTaxConfig()" class="absolute top-2 right-2 text-gray-500 hover:text-white"><i class="fa-solid fa-cog"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="grid lg:grid-cols-3 gap-8">
+                            
+                            <div class="lg:col-span-1 space-y-6">
+                                <div class="bg-panel rounded-2xl border border-white/10 overflow-hidden">
+                                    <div class="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center">
+                                        <h3 class="text-white font-bold text-sm">Conciliación Bancaria</h3>
+                                        <span class="text-[10px] bg-rose-600 px-2 py-0.5 rounded text-white font-bold">${pending.length} Pendientes</span>
+                                    </div>
+                                    <div class="max-h-[500px] overflow-y-auto custom-scrollbar p-3 space-y-3">
+                                        ${pending.length === 0 ? '<p class="text-center text-gray-600 text-xs py-10">Todo al día.</p>' : ''}
+                                        ${pending.map(t => `
+                                            <div class="bg-black/40 border border-white/5 rounded-xl p-3 hover:border-gold/30 transition-colors">
+                                                <div class="flex justify-between items-start mb-2">
+                                                    <span class="text-[10px] text-gold font-bold uppercase">${t.method}</span>
+                                                    <span class="text-[9px] text-gray-500">${new Date(t.date).toLocaleDateString()}</span>
+                                                </div>
+                                                <div class="flex gap-3 mb-3">
+                                                    <div class="w-16 h-16 bg-black rounded border border-white/10 overflow-hidden cursor-pointer" onclick="Swal.fire({imageUrl: '${t.proof}', imageAlt: 'Comprobante', background: '#000'})">
+                                                        <img src="${t.proof}" class="w-full h-full object-cover opacity-80 hover:opacity-100">
+                                                    </div>
+                                                    <div>
+                                                        <p class="text-white font-bold text-sm">${t.detail}</p>
+                                                        <p class="text-white font-mono text-xs">${FinanceManager.fmt(t.total)}</p>
+                                                        <p class="text-[10px] text-gray-400">Usuario: ${t.studentId}</p>
+                                                    </div>
+                                                </div>
+                                                <div class="grid grid-cols-2 gap-2">
+                                                    <button onclick="Admin.approveTransaction(${t.id}, true)" class="bg-success/20 text-success hover:bg-success hover:text-black py-1.5 rounded text-[10px] font-bold transition-colors">APROBAR</button>
+                                                    <button onclick="Admin.approveTransaction(${t.id}, false)" class="bg-rose-500/20 text-rose-500 hover:bg-rose-500 hover:text-white py-1.5 rounded text-[10px] font-bold transition-colors">RECHAZAR</button>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="lg:col-span-2 space-y-6">
+                                
+                                <div class="bg-panel p-4 rounded-xl border border-white/10 flex gap-4 items-center">
+                                    <span class="text-[10px] uppercase font-bold text-gray-500">Rango:</span>
+                                    <input type="date" id="rep-start" value="${firstDay}" class="bg-black text-xs text-white p-2 rounded border border-white/10 outline-none">
+                                    <input type="date" id="rep-end" value="${lastDay}" class="bg-black text-xs text-white p-2 rounded border border-white/10 outline-none">
+                                    <button onclick="Admin.generateReport()" class="bg-gold text-black text-[10px] font-bold px-4 py-2 rounded hover:bg-white transition-colors">GENERAR ESTADO RESULTADOS</button>
+                                </div>
+
+                                <div id="financial-report-view" class="bg-white text-black p-8 rounded-xl shadow-2xl min-h-[400px]">
+                                    <div class="text-center mb-8">
+                                        <h2 class="font-serif text-2xl font-bold tracking-widest">SENSACIÓN BOOGALOO</h2>
+                                        <p class="text-xs uppercase tracking-[0.3em] text-gray-500 mt-1">Estado de Resultados Integral</p>
+                                        <p class="text-xs font-mono mt-2" id="report-dates">Del ${firstDay} al ${lastDay}</p>
+                                    </div>
+
+                                    <div class="space-y-2 text-sm font-mono" id="report-body">
+                                        <p class="text-center text-gray-400 italic mt-10">Selecciona un rango y genera el reporte.</p>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+
+            // --- HELPERS FINANCIEROS ADMIN ---
+            
+            addExpenseModal() {
+                const cuentas = DataManager.get().cuentas.filter(c => c.type === 'expense' || c.type === 'cost');
+                const html = `
+                    <div class="space-y-4">
+                        <div>
+                            <label class="admin-label">Categoría del Gasto</label>
+                            <select id="exp-cat" class="w-full bg-black border border-white/10 p-3 rounded text-white outline-none">
+                                ${cuentas.map(c => `<option value="${c.id}">${c.id} - ${c.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="admin-label">Detalle / Proveedor</label>
+                            <input type="text" id="exp-det" class="admin-input w-full bg-black border border-white/10 p-3 rounded text-white" placeholder="Ej. Pago Alquiler Mes">
+                        </div>
+                        <div>
+                            <label class="admin-label">Monto Total</label>
+                            <input type="number" id="exp-amount" class="admin-input w-full bg-black border border-white/10 p-3 rounded text-white" placeholder="0.00">
+                        </div>
+                        <button onclick="Admin.submitExpense()" class="btn-galaxy w-full py-3 rounded-lg font-bold text-xs shadow-lg mt-4">REGISTRAR SALIDA</button>
+                    </div>
+                `;
+                $('#modal-title').innerText = "REGISTRAR GASTO";
+                $('#modal-subtitle').innerText = "Salida de Efectivo";
+                $('#modal-body').innerHTML = html;
+                $('#modal-save-btn').classList.add('hidden');
+                $('#admin-modal').classList.remove('hidden');
+                setTimeout(()=>{$('#modal-backdrop').classList.remove('opacity-0'); $('#modal-panel').classList.remove('scale-95','opacity-0')},10);
+            },
+
+            submitExpense() {
+                const cat = $('#exp-cat').value;
+                const det = $('#exp-det').value;
+                const amount = $('#exp-amount').value;
+                if(!det || !amount) return;
+
+                // Gasto es negativo para el flujo, pero positivo para la cuenta de gasto
+                FinanceManager.addTransaction('expense', cat, amount, det, 'approved');
+                this.closeModal();
+                this.renderFinanzasEditor(document.getElementById('admin-tab-finanzas'));
+                Swal.fire({icon:'success', title:'Gasto Registrado', background:'#000', color:'#fff', confirmButtonColor:'#D4AF37'});
+            },
+
+            // --- ACTUALIZAR EN FinanceManager ---
+            approveTransaction(id, isApproved) {
+                const d = DataManager.get();
+                const idx = d.transacciones.findIndex(t => t.id === id);
+                
+                if(idx > -1) {
+                    const trans = d.transacciones[idx];
+                    
+                    if(isApproved) {
+                        // 1. CAMBIAR ESTADO A APROBADO
+                        trans.status = 'approved';
+                        trans.accountId = '401'; // Mover de "Por Conciliar" a "Ingreso Membresías" (Opcional, contabilidad avanzada)
+                        
+                        // 2. ACTIVAR EL SERVICIO AUTOMÁTICAMENTE
+                        if (trans.metadata && trans.studentId) {
+                            App.activateService(trans.studentId, trans.metadata);
+                        }
+
+                        Swal.fire({icon:'success', title:'Conciliado y Activado', text:'El plan del alumno ha sido actualizado.', background:'#000', color:'#fff'});
+                    } else {
+                        d.transacciones.splice(idx, 1); // Rechazar/Eliminar
+                        Swal.fire({icon:'info', title:'Rechazado', text:'Transacción eliminada.', background:'#000', color:'#fff'});
+                    }
+                    
+                    DataManager.save(d);
+                    // Actualizar vista
+                    Admin.renderFinanzasEditor(document.getElementById('admin-tab-finanzas')); 
+                }
+            },
+
+            generateReport() {
+                const start = new Date($('#rep-start').value);
+                const end = new Date($('#rep-end').value);
+                end.setHours(23,59,59);
+
+                const d = DataManager.get();
+                // Filtrar por fecha y aprobados
+                const data = d.transacciones.filter(t => {
+                    const date = new Date(t.date);
+                    return date >= start && date <= end && t.status === 'approved';
+                });
+
+                // Agrupar por Cuentas
+                const cuentas = {};
+                d.cuentas.forEach(c => cuentas[c.id] = { ...c, total: 0 });
+
+                data.forEach(t => {
+                    // Si es ingreso suma, si es gasto suma (en su cuenta de gasto)
+                    if(cuentas[t.accountId]) {
+                        cuentas[t.accountId].total += parseFloat(t.amount);
+                    }
+                });
+
+                // Calcular Totales Mayores
+                const totalIngresos = Object.values(cuentas).filter(c => c.type === 'income').reduce((a,b) => a + b.total, 0);
+                const totalCostos = Object.values(cuentas).filter(c => c.type === 'cost').reduce((a,b) => a + b.total, 0);
+                const totalGastos = Object.values(cuentas).filter(c => c.type === 'expense').reduce((a,b) => a + b.total, 0);
+                
+                const utilidadBruta = totalIngresos - totalCostos;
+                const utilidadNeta = utilidadBruta - totalGastos;
+
+                // Renderizar HTML estilo "Papel Contable"
+                const row = (name, val, bold=false, indent=false) => `
+                    <div class="flex justify-between py-1 border-b border-gray-100 ${bold?'font-bold text-black':'text-gray-600'}">
+                        <span class="${indent?'pl-4':''}">${name}</span>
+                        <span>${val < 0 ? '('+FinanceManager.fmt(Math.abs(val))+')' : FinanceManager.fmt(val)}</span>
+                    </div>
+                `;
+
+                const html = `
+                    <div class="mb-4">
+                        ${row('INGRESOS OPERATIVOS', totalIngresos, true)}
+                        ${Object.values(cuentas).filter(c => c.type === 'income' && c.total > 0).map(c => row(c.name, c.total, false, true)).join('')}
+                    </div>
+
+                    <div class="mb-4">
+                        ${row('COSTOS DE VENTAS', totalCostos, true)}
+                        ${Object.values(cuentas).filter(c => c.type === 'cost' && c.total > 0).map(c => row(c.name, c.total, false, true)).join('')}
+                    </div>
+
+                    <div class="bg-gray-100 p-2 mb-6 font-bold flex justify-between">
+                        <span>UTILIDAD BRUTA</span>
+                        <span>${FinanceManager.fmt(utilidadBruta)}</span>
+                    </div>
+
+                    <div class="mb-4">
+                        ${row('GASTOS OPERATIVOS', totalGastos, true)}
+                        ${Object.values(cuentas).filter(c => c.type === 'expense' && c.total > 0).map(c => row(c.name, c.total, false, true)).join('')}
+                    </div>
+
+                    <div class="border-t-4 border-black p-3 mt-4 text-xl font-bold flex justify-between ${utilidadNeta >= 0 ? 'text-green-700' : 'text-red-600'}">
+                        <span>UTILIDAD NETA DEL PERIODO</span>
+                        <span>${FinanceManager.fmt(utilidadNeta)}</span>
+                    </div>
+                `;
+
+                document.getElementById('report-body').innerHTML = html;
+                document.getElementById('report-dates').innerText = `Periodo: ${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+            },
+
+            toggleTaxConfig() {
+                const d = DataManager.get();
+                // Alternar simple: Incluido <-> Más Impuesto
+                d.config.finanzas.pricesIncludeIva = !d.config.finanzas.pricesIncludeIva;
+                DataManager.save(d);
+                this.renderFinanzasEditor(document.getElementById('admin-tab-finanzas'));
+                
+                // Actualizar TODA la web pública porque los precios cambiaron
+                App.renderPublic(); 
+                App.toggleCurrency(); // Forzar refresco de visualización
+                
+                const status = d.config.finanzas.pricesIncludeIva ? "IMPUESTOS INCLUIDOS" : "PRECIOS + I.V.A.";
+                Swal.fire({icon:'success', title:'Configuración Actualizada', text: `El sistema ahora muestra: ${status}`, background:'#000', color:'#fff'});
+            }
             
         };
 
@@ -6263,4 +6850,3 @@
     </script>
 </body>
 </html>
-
